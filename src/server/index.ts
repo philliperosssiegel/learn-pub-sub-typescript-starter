@@ -9,8 +9,6 @@ async function main() {
   const conn = await amqp.connect(rabbitConnString);
   console.log("Peril game server connected to RabbitMQ!");
 
-  const confirmChannel = await conn.createConfirmChannel();
-
   ["SIGINT", "SIGTERM"].forEach((signal) =>
     process.on(signal, async () => {
       try {
@@ -24,14 +22,7 @@ async function main() {
     }),
   );
 
-  // try {
-  //   const state: PlayingState = {
-  //     isPaused: true,
-  //   };
-  //   await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, state);
-  // } catch (err) {
-  //   console.error("Error publishing message:", err);
-  // }
+  const publishCh = await conn.createConfirmChannel();
 
   printServerHelp();
 
@@ -39,19 +30,31 @@ async function main() {
   while (loop) {
     const input = await getInput();
     if (input.length !== 0) {
-      switch (input[0]) {
+      const command = input[0];
+      switch (command) {
         case "pause":
-          console.log("Sending a pause message");
-          await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, {isPaused: true});
+          console.log("Publishing paused game state");
+          try {
+            await publishJSON(publishCh, ExchangePerilDirect, PauseKey, {
+                isPaused: true,
+              });
+          } catch (err) {
+            console.error("Error publishing pause message:", err);
+          }
           break;
         case "resume":
-          console.log("Sending a resume message")
-          await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, {isPaused: false});
+          console.log("Publishing resumed game state")
+          try {
+            await publishJSON(publishCh, ExchangePerilDirect, PauseKey, {
+                isPaused: false,
+              });
+          } catch (err) {
+            console.error("Error publishing resume message:", err);
+          }
           break;
         case "quit":
           console.log("Exiting server")
-          loop = false;
-          break;
+          process.exit(0)
         default:
           console.log("Invalid input");
           break;
