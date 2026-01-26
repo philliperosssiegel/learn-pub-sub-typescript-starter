@@ -6,8 +6,21 @@ export function publishJSON<T>(
   routingKey: string,
   value: T,
 ): Promise<void> {
-  const content = JSON.stringify(value);
-  const contentBuffer = Buffer.from(content); 
-  ch.publish(exchange, routingKey, contentBuffer, {"contentType": "application/json"})
-  return Promise.resolve();
-};
+ const content = Buffer.from(JSON.stringify(value));
+
+  return new Promise((resolve, reject) => {
+    ch.publish(
+      exchange,
+      routingKey,
+      content,
+      { contentType: "application/json" },
+      (err) => {
+        if (err !== null) {
+          reject(new Error("Message was NACKed by the broker"));
+        } else {
+          resolve();
+        }
+      },
+    );
+  });
+}
