@@ -1,9 +1,14 @@
 import amqp from "amqplib";
+import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import type { PlayingState } from "../internal/gamelogic/gamestate.js"
+import { publishJSON } from "../internal/pubsub/publish.js";
 
 async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
   const conn = await amqp.connect(rabbitConnString);
   console.log("Peril game server connected to RabbitMQ!");
+
+  const confirmChannel = await conn.createConfirmChannel();
 
   ["SIGINT", "SIGTERM"].forEach((signal) =>
     process.on(signal, async () => {
@@ -17,6 +22,15 @@ async function main() {
       }
     }),
   );
+
+  try {
+    const state: PlayingState = {
+      isPaused: true,
+    };
+    await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, state);
+  } catch (err) {
+    console.error("Error publishing message:", err);
+  }
 }
 
 main().catch((err) => {
