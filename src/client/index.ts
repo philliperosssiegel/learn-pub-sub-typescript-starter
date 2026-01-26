@@ -43,10 +43,18 @@ async function main() {
       const command = input[0];
       switch (command) {
         case "spawn":
-          commandSpawn(gameState, input)  
+          try {
+            commandSpawn(gameState, input)
+          } catch (err) {
+            console.log((err as Error).message);
+          }
         break;
         case "move":
-          commandMove(gameState, input);
+          try {
+            commandMove(gameState, input);
+          } catch (err) {
+            console.log((err as Error).message);
+          }         
           break;
         case "status":
           commandStatus(gameState);
