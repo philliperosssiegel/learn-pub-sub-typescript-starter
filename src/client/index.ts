@@ -1,16 +1,35 @@
 import amqp from "amqplib";
 import { clientWelcome } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind } from "../internal/pubsub/publish.js";
-import { ExchangePerilDirect, PauseKey} from "../internal/routing/routing.js";
+import { declareAndBind, SimpleQueueType } from "../internal/pubsub/consume.js";
+import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
 
 async function main() {
-  console.log("Starting Peril client...");
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
   const conn = await amqp.connect(rabbitConnString);
-  console.log("Peril game server connected to RabbitMQ!");
+  console.log("Peril game client connected to RabbitMQ!");
 
-  const username = await clientWelcome()
-  await declareAndBind(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, "transient")
+  ["SIGINT", "SIGTERM"].forEach((signal) =>
+    process.on(signal, async () => {
+      try {
+        await conn.close();
+        console.log("RabbitMQ connection closed.");
+      } catch (err) {
+        console.error("Error closing RabbitMQ connection:", err);
+      } finally {
+        process.exit(0);
+      }
+    }),
+  );
+
+  const username = await clientWelcome();
+
+  await declareAndBind(
+    conn,
+    ExchangePerilDirect,
+    `${PauseKey}.${username}`,
+    PauseKey,
+    SimpleQueueType.Transient,
+  );
 }
 
 main().catch((err) => {
