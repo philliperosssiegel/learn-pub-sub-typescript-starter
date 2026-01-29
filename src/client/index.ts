@@ -1,6 +1,6 @@
 import amqp from "amqplib";
 import { clientWelcome, commandStatus, getInput, printQuit, printServerHelp } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind, SimpleQueueType, subscribeJSON } from "../internal/pubsub/consume.js";
+import { SimpleQueueType, subscribeJSON } from "../internal/pubsub/consume.js";
 import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
@@ -27,26 +27,11 @@ async function main() {
   );
 
   const username = await clientWelcome();
+  const gs = new GameState(username);
+  const publishCh = await conn.createConfirmChannel();
 
-  await declareAndBind(
-    conn,
-    ExchangePerilDirect,
-    `${PauseKey}.${username}`,
-    PauseKey,
-    SimpleQueueType.Transient,
-  );
-  
-  await declareAndBind(
-    conn,
-    ExchangePerilTopic,
-    `${ArmyMovesPrefix}.${username}`,
-    `${ArmyMovesPrefix}.*`,
-    SimpleQueueType.Transient,
-  );
-
-  const gameState = new GameState(username);
-  await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gameState));
-  await subscribeJSON(conn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gameState));
+  await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
+  await subscribeJSON(conn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gs));
 
   const loop = true;
   while (loop) {
@@ -56,30 +41,21 @@ async function main() {
       switch (command) {
         case "spawn":
           try {
-            commandSpawn(gameState, input)
+            commandSpawn(gs, input)
           } catch (err) {
             console.log((err as Error).message);
           }
         break;
         case "move":
           try {
-            commandMove(gameState, input);
+            const move = commandMove(gs, input);
+            await publishJSON(publishCh, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, move);
           } catch (err) {
             console.log((err as Error).message);
           }
-          try {
-            const confirmCh = await conn.createConfirmChannel();
-            await publishJSON(confirmCh, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, {
-                toLocation: input[1],
-                units: input[2],
-                player: gameState.getPlayerSnap()
-              });
-          } catch (err) {
-            console.error("Error publishing pause message:", err);
-          }
           break;
         case "status":
-          commandStatus(gameState);
+          commandStatus(gs);
           break;
         case "help":
           printServerHelp();
