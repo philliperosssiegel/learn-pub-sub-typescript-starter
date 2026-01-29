@@ -1,11 +1,10 @@
 import amqp from "amqplib";
 import { clientWelcome, commandStatus, getInput, printQuit, printServerHelp } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/consume.js";
+import { declareAndBind, SimpleQueueType, subscribeJSON } from "../internal/pubsub/consume.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { subscribeJSON } from "../internal/pubsub/subscribe.js";
 import { handlerPause } from "./handlers.js";
 
 async function main() {
@@ -37,7 +36,7 @@ async function main() {
   );
   
   const gameState = new GameState(username);
-  await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, 1, handlerPause(gameState));
+  await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gameState));
 
   const loop = true;
   while (loop) {
