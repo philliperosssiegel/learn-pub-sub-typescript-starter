@@ -1,11 +1,12 @@
 import amqp from "amqplib";
 import { clientWelcome, commandStatus, getInput, printQuit, printServerHelp } from "../internal/gamelogic/gamelogic.js";
 import { declareAndBind, SimpleQueueType, subscribeJSON } from "../internal/pubsub/consume.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause } from "./handlers.js";
+import { publishJSON } from "../internal/pubsub/publish.js";
 
 async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
@@ -35,8 +36,17 @@ async function main() {
     SimpleQueueType.Transient,
   );
   
+  await declareAndBind(
+    conn,
+    ExchangePerilTopic,
+    `${ArmyMovesPrefix}.${username}`,
+    `${ArmyMovesPrefix}.*`,
+    SimpleQueueType.Transient,
+  );
+
   const gameState = new GameState(username);
   await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gameState));
+  await subscribeJSON(conn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gameState));
 
   const loop = true;
   while (loop) {
@@ -56,7 +66,17 @@ async function main() {
             commandMove(gameState, input);
           } catch (err) {
             console.log((err as Error).message);
-          }         
+          }
+          try {
+            const confirmCh = await conn.createConfirmChannel();
+            await publishJSON(confirmCh, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, {
+                toLocation: input[1],
+                units: input[2],
+                player: gameState.getPlayerSnap()
+              });
+          } catch (err) {
+            console.error("Error publishing pause message:", err);
+          }
           break;
         case "status":
           commandStatus(gameState);
