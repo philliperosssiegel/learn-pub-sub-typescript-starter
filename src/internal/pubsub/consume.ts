@@ -24,13 +24,15 @@ export async function declareAndBind(
   return [ch, queue];
 }
 
+export type Acktype = "Ack" | "NackRequeue" | "NackDiscard";
+
 export async function subscribeJSON<T>(
   conn: amqp.ChannelModel,
   exchange: string,
   queueName: string,
   key: string,
   queueType: SimpleQueueType, // an enum to represent "durable" or "transient"
-  handler: (data: T) => void,
+  handler: (data: T) => Acktype,
 ): Promise<void> {
     const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType);
     await ch.consume(queue.queue, 
@@ -44,8 +46,26 @@ export async function subscribeJSON<T>(
                 console.error("Could not unmarshal message:", err);
                 return;
             }
-            
-            handler(data);
-            ch.ack(message)
+            try {
+                const acktype_return = handler(data);
+                
+                switch (acktype_return) {
+                    case "Ack":
+                        ch.ack(message);
+                        console.log("Ack");
+                        break;
+                    case "NackRequeue":
+                        ch.nack(message, false, true);
+                        console.log("NackRequeue");
+                        break;
+                    case "NackDiscard":
+                        ch.nack(message, false, false);
+                        console.log("NackDiscard");
+                        break;
+                }
+            } catch (err) {
+                console.error("Error handling message:", err);
+                ch.nack(message, false, false);
+            }
         })
 };
