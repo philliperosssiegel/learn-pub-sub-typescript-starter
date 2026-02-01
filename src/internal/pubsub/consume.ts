@@ -6,9 +6,6 @@ export enum SimpleQueueType {
   Transient,
 }
 
-// type AssertQueueArguments = {
-//     "x-dead-letter-exchange": string;
-// }
 export async function declareAndBind(
   conn: amqp.ChannelModel,
   exchange: string,
@@ -41,7 +38,7 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType, // an enum to represent "durable" or "transient"
-  handler: (data: T) => AckType,
+  handler: (data: T) => AckType | AckType,
 ): Promise<void> {
     const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType);
     await ch.consume(queue.queue, 
