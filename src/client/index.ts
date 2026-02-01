@@ -32,7 +32,7 @@ async function main() {
 
   await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
   await subscribeJSON(conn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gs, publishCh));
-  await subscribeJSON(conn, ExchangePerilTopic, `${WarRecognitionsPrefix}`, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable, handlerWar(gs, publishCh));
+  await subscribeJSON(conn, ExchangePerilTopic, `${WarRecognitionsPrefix}`, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable, handlerWar(gs));
 
   const loop = true;
   while (loop) {

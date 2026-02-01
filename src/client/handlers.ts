@@ -16,54 +16,68 @@ export function handlerPause(gs: GameState): (ps: PlayingState) => AckType {
     };
 };
 
-export function handlerMove(gs: GameState, ch: ConfirmChannel): (move: ArmyMove) => AckType {
-    return (move: ArmyMove) => {
-        const move_outcome = handleMove(gs, move);
-        const message = `Moved ${move.units.length} units to ${move.toLocation}`;
-        console.log(message);
-        process.stdout.write("> ");
+export function handlerMove(
+  gs: GameState,
+  ch: ConfirmChannel,
+): (move: ArmyMove) => Promise<AckType> {
+  return async (move: ArmyMove): Promise<AckType> => {
+    try {
+      const outcome = handleMove(gs, move);
+      switch (outcome) {
+        case MoveOutcome.Safe:
+        case MoveOutcome.SamePlayer:
+          return AckType.Ack;
+        case MoveOutcome.MakeWar:
+          const recognition: RecognitionOfWar = {
+            attacker: move.player,
+            defender: gs.getPlayerSnap(),
+          };
 
-        switch (move_outcome) {
-            case MoveOutcome.Safe:
-                return AckType.Ack;
-            case MoveOutcome.MakeWar:
-                publishJSON(ch, ExchangePerilTopic, `${WarRecognitionsPrefix}.${gs.getUsername()}`, {attacker: move.player, defender: gs.getPlayerSnap().username})
-                // return AckType.Ack;
-                return AckType.NackRequeue;
-            case MoveOutcome.SamePlayer:
-                return AckType.NackDiscard;
-            default:
-                return AckType.NackDiscard;
-        };
-    };
-};
-export interface RecognitionOfWar {
-  attacker: Player;
-  defender: Player;
+          try {
+            await publishJSON(
+              ch,
+              ExchangePerilTopic,
+              `${WarRecognitionsPrefix}.${gs.getUsername()}`,
+              recognition,
+            );
+          } catch (err) {
+            console.error("Error publishing war recognition:", err);
+          } finally {
+            return AckType.NackRequeue;
+          }
+        default:
+          return AckType.NackDiscard;
+      }
+    } finally {
+      process.stdout.write("> ");
+    }
+  };
 }
 
 
+export function handlerWar(
+  gs: GameState,
+): (war: RecognitionOfWar) => Promise<AckType> {
+  return async (war: RecognitionOfWar): Promise<AckType> => {
+    try {
+      const outcome = handleWar(gs, war);
 
-export function handlerWar(gs: GameState, ch: ConfirmChannel): (rw: RecognitionOfWar) => AckType {
-    return (rw: RecognitionOfWar) => {
-        const warResolution = handleWar(gs, rw);
-
-        // process.stdout.write("> ");
-        console.log("> ");
-        switch (warResolution.result) {
-            case WarOutcome.NotInvolved:
-                return AckType.NackRequeue;
-            case WarOutcome.NoUnits:
-                return AckType.NackDiscard;
-            case WarOutcome.OpponentWon:
-                return AckType.Ack;
-            case WarOutcome.YouWon:
-                return AckType.Ack;
-            case WarOutcome.Draw:
-                return AckType.Ack;
-            default:
-                console.error("Invalid warResolution");
-                return AckType.NackDiscard;
-        }
+      switch (outcome.result) {
+        case WarOutcome.NotInvolved:
+          return AckType.NackRequeue;
+        case WarOutcome.NoUnits:
+          return AckType.NackDiscard;
+        case WarOutcome.YouWon:
+        case WarOutcome.OpponentWon:
+        case WarOutcome.Draw:
+          return AckType.Ack;
+        default:
+          const unreachable: never = outcome;
+          console.log("Unexpected war resolution: ", unreachable);
+          return AckType.NackDiscard;
+      }
+    } finally {
+      process.stdout.write("> ");
     }
+  };
 }
