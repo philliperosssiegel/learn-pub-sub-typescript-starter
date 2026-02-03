@@ -7,6 +7,7 @@ import { AckType } from "../internal/pubsub/consume.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { ExchangePerilTopic, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import type { ConfirmChannel } from "amqplib";
+import { publishGameLog } from "./index.js";
 
 export function handlerPause(gs: GameState): (ps: PlayingState) => AckType {
     return (ps: PlayingState) => {
@@ -57,6 +58,7 @@ export function handlerMove(
 
 export function handlerWar(
   gs: GameState,
+  ch: ConfirmChannel
 ): (war: RecognitionOfWar) => Promise<AckType> {
   return async (war: RecognitionOfWar): Promise<AckType> => {
     try {
@@ -68,9 +70,26 @@ export function handlerWar(
         case WarOutcome.NoUnits:
           return AckType.NackDiscard;
         case WarOutcome.YouWon:
+          try {
+            await publishGameLog(ch, war.attacker.username, `${war.attacker.username} won a war against ${war.defender.username}`)
+            return AckType.Ack;
+          } catch (err) {
+            return AckType.NackRequeue;
+          }
         case WarOutcome.OpponentWon:
+          try {
+            await publishGameLog(ch, war.attacker.username, `${war.defender.username} won a war against ${war.attacker.username}`)
+            return AckType.Ack;
+          } catch (err) {
+            return AckType.NackRequeue;
+          }
         case WarOutcome.Draw:
-          return AckType.Ack;
+          try {
+            await publishGameLog(ch, war.attacker.username, `A war between ${war.attacker.username} and ${war.defender.username} resulted in a draw`);
+            return AckType.Ack;
+          } catch (err) {
+            return AckType.NackRequeue;
+          } 
         default:
           const unreachable: never = outcome;
           console.log("Unexpected war resolution: ", unreachable);
