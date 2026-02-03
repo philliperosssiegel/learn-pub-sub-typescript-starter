@@ -3,7 +3,8 @@ import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "
 import type { PlayingState } from "../internal/gamelogic/gamestate.js"
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { getInput, printServerHelp } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/consume.js";
+import { AckType, declareAndBind, SimpleQueueType, subscribeMsgPack } from "../internal/pubsub/consume.js";
+import { writeLog, type GameLog } from "../internal/gamelogic/logs.js";
 
 async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
@@ -25,13 +26,31 @@ async function main() {
 
   const publishCh = await conn.createConfirmChannel();
 
-  await declareAndBind(
+  // await declareAndBind(
+  //     conn,
+  //     ExchangePerilTopic,
+  //     GameLogSlug,
+  //     `${GameLogSlug}.*`,
+  //     SimpleQueueType.Durable,
+  //   );
+
+  await subscribeMsgPack(
       conn,
       ExchangePerilTopic,
-      GameLogSlug,
+      `${GameLogSlug}`,
       `${GameLogSlug}.*`,
       SimpleQueueType.Durable,
-    );
+      async (gameLog: GameLog) => {
+        try {
+          await writeLog(gameLog);
+          console.log("Wrote game log to disk");
+        } catch (err) {
+          console.error("Error encountered writing log to disk:", err);
+          return AckType.NackDiscard;
+        }
+        return AckType.Ack;
+    }
+  )
 
   printServerHelp();
 
