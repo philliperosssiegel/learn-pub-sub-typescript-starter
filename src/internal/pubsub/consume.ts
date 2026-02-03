@@ -143,5 +143,7 @@ export async function subscribe<T>(
                 ch.nack(message, false, false);
                 return;
             }
-        })
+        },
+    {noAck: false}
+    )
 };
