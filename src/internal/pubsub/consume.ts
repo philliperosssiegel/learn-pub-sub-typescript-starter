@@ -58,15 +58,12 @@ export async function subscribeJSON<T>(
                 switch (result) {
                     case AckType.Ack:
                         ch.ack(message);
-                        console.log("Ack");
                         break;
                     case AckType.NackRequeue:
                         ch.nack(message, false, true);
-                        console.log("NackRequeue");
                         break;
                     case AckType.NackDiscard:
                         ch.nack(message, false, false);
-                        console.log("NackDiscard");
                         break;
                     default:
                         const unreachable: never = result;

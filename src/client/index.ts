@@ -7,6 +7,7 @@ import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
 import { publishJSON, publishMsgPack } from "../internal/pubsub/publish.js";
+import type { GameLog } from "../internal/gamelogic/logs.js";
 
 async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
@@ -80,18 +81,12 @@ main().catch((err) => {
   process.exit(1);
 });
 
-type GameLog = {
-  username: string;
-  message: string;
-  currentTime: Date;
-}
-
-export async function publishGameLog(channel: amqp.ConfirmChannel, username: string, message: string) {
+export async function publishGameLog(channel: amqp.ConfirmChannel, username: string, message: string): Promise<void> {
   const gameLog: GameLog = {
-    username: username,
+    currentTime: new Date(),
     message: message,
-    currentTime: new Date()
+    username: username
   }
 
-  await publishMsgPack(channel, ExchangePerilTopic, `${GameLogSlug}.${username}`, message);
+  return publishMsgPack(channel, ExchangePerilTopic, `${GameLogSlug}.${username}`, gameLog);
 };
