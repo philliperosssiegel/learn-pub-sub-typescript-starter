@@ -1,5 +1,5 @@
 import amqp from "amqplib";
-import { clientWelcome, commandStatus, getInput, printQuit, printServerHelp } from "../internal/gamelogic/gamelogic.js";
+import { clientWelcome, commandStatus, getInput, getMaliciousLog, printQuit, printServerHelp } from "../internal/gamelogic/gamelogic.js";
 import { SimpleQueueType, subscribeJSON } from "../internal/pubsub/consume.js";
 import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
@@ -63,7 +63,15 @@ async function main() {
           printServerHelp();
           break;
         case "spam":
-          console.log("Spamming not allowed yet!");
+          console.log("Spam!")
+          if (input.length >= 2) {
+            const n = Number(input[1])
+            for (let i = 0; i <= n; i++) {
+              const maliciousLog = getMaliciousLog()
+              await publishJSON(publishCh, ExchangePerilTopic, `${GameLogSlug}.${username}`, maliciousLog);
+            }
+          }
+          // console.log("Spamming not allowed yet!");
           break;
         case "quit":
           printQuit();
